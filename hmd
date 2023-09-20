@@ -1,0 +1,47 @@
+#!/bin/env bash
+CONFIG_FILE=~/.config/hmd/config
+TOKEN_FILE=~/.config/hmd/token
+
+help () {
+    echo "hmd [-r] [-c config_file] note_id_or_alias"
+    exit $1
+}
+
+REFRESH_CACHE=false
+
+while getopts "c:rh" flag; do
+case "$flag" in
+    c) CONFIG_FILE=$OPTARG;;
+    r) REFRESH_CACHE=true;;
+    h)
+        help 0
+        ;;
+esac
+done
+
+NOTE_ID=${@:$OPTIND:1}
+if [ -z $NOTE_ID ]; then
+    help 1
+fi
+
+FULL_ID=$(grep -E "^${NOTE_ID}" $CONFIG_FILE 2>/dev/null | tail -n 1 | cut -f 2 -d ' ')
+if [ -n "${FULL_ID}" ]; then
+    NOTE_ID=$FULL_ID
+fi
+
+TOKEN=$(cat "${TOKEN_FILE}" 2>/dev/null)
+if [ -z $TOKEN ]; then
+    echo "Err: no token provided"
+    exit 1
+fi
+
+CACHE_DIR=~/.cache/hmd/
+if [ ! -d "$CACHE_DIR" ]; then
+  mkdir -p $CACHE_DIR
+fi
+
+if [ ! -f "${CACHE_DIR}/${NOTE_ID}" ] || [ "$REFRESH_CACHE" = true ] ; then
+  curl -s "https://api.hackmd.io/v1/notes/${NOTE_ID}" -H "Authorization: Bearer ${TOKEN}" > "${CACHE_DIR}/${NOTE_ID}"
+fi
+
+cat "${CACHE_DIR}/${NOTE_ID}" | jq -r '.content' | glow
